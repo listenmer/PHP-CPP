@@ -10,7 +10,7 @@ php:
   - 7.0
   - 7.1
   - 7.2
-#  - nightly # doesn't work yet on PHP 7.3! not building.
+  - nightly # doesn't work yet on PHP 7.3! not building.
 
 
 # setting the env is the easiest, because it will mix with all the separate php versions (travis does this)
@@ -24,6 +24,10 @@ env:
   - COMPILER_PKG=clang++-4 COMPILER=clang++-4.0
   - COMPILER_PKG=clang++-5 COMPILER=clang++-5.0
   - COMPILER_PKG=clang++-6 COMPILER=clang++-6.0
+
+matrix:
+  allow_failures:
+    - php: nightly
 
 before_install:
   # install access to all gcc compilers
