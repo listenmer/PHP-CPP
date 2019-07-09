@@ -4,7 +4,7 @@
  *  Startup include file to compile the phpcpp library
  *
  *  @author Emiel Bruijntjes <emiel.bruijntjes@copernica.com>
- *  @copyright 2013 Copernica BV
+ *  @copyright 2013 - 2019 Copernica BV
  */
 
 /**
@@ -67,11 +67,12 @@
 #include "../include/version.h"
 #include "../include/inivalue.h"
 #include "../include/ini.h"
+#include "../include/throwable.h"
 #include "../include/exception.h"
-#include "../include/fatalerror.h"
+#include "../include/error.h"
 #include "../include/streams.h"
 #include "../include/type.h"
-#include "../include/errors.h"
+#include "../include/message.h"
 #include "../include/hashparent.h"
 #include "../include/value.h"
 #include "../include/valueiterator.h"
@@ -104,6 +105,7 @@
 #include "../include/script.h"
 #include "../include/file.h"
 #include "../include/function.h"
+#include "../include/stream.h"
 
 /**
  *  Common header files for internal use only
@@ -125,7 +127,6 @@
 #include "stringmember.h"
 #include "floatmember.h"
 #include "arithmetic.h"
-#include "origexception.h"
 #include "notimplemented.h"
 #include "property.h"
 #include "valueiteratorimpl.h"
@@ -139,6 +140,8 @@
 #include "extensionimpl.h"
 #include "compileroptions.h"
 #include "executestate.h"
+#include "rethrowable.h"
+#include "state.h"
 #include "opcodes.h"
 #include "functor.h"
 #include "constantimpl.h"

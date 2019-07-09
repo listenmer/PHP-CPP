@@ -15,7 +15,7 @@
  *  this class.
  *
  *  @author Emiel Bruijntjes <emiel.bruijntjes@copernica.com>
- *  @copyright 2013 Copernica BV
+ *  @copyright 2013 - 2019 Copernica BV
  */
 
 /**
@@ -1217,12 +1217,13 @@ protected:
     friend class ZendCallable;
     friend class Script;
     friend class ConstantImpl;
+    friend class Stream;
 
     /**
      *  Friend functions which have to access that zval directly
      */
     friend Value set_exception_handler(const std::function<Value(Parameters &params)> &handler);
-    friend Value set_error_handler(const std::function<Value(Parameters &params)> &handler, Error error);
+    friend Value set_error_handler(const std::function<Value(Parameters &params)> &handler, Message message);
 };
 
 /**

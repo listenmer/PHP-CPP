@@ -4,7 +4,7 @@
  *  Implementation file for the ClassImpl class
  *
  *  @author Emiel Bruijntjes <emiel.bruijntjes@copernica.com>
- *  @copyright 2014 Copernica BV
+ *  @copyright 2014 - 2019 Copernica BV
  */
 #include "includes.h"
 #include <cstring>
@@ -92,7 +92,7 @@ void ClassImpl::callMethod(INTERNAL_FUNCTION_PARAMETERS)
 {
     // retrieve the originally called (and by us allocated) function object
     auto *data = (CallData *)execute_data->func;
-    zend_internal_function *func = &data->func;
+    auto *func = &data->func;
 
     // retrieve the function name
     const char *name = ZSTR_VAL(func->function_name);
@@ -106,9 +106,6 @@ void ClassImpl::callMethod(INTERNAL_FUNCTION_PARAMETERS)
     // the function could throw an exception
     try
     {
-        // wrap the return value
-        Value result(return_value, true);
-
         // construct parameters
         ParametersImpl params(getThis(), ZEND_NUM_ARGS());
 
@@ -116,18 +113,20 @@ void ClassImpl::callMethod(INTERNAL_FUNCTION_PARAMETERS)
         Base *base = params.object();
 
         // is this a static, or a non-static call?
-        if (base) result = meta->callCall(base, name, params);
-        else result = meta->callCallStatic(name, params);
+        Php::Value result = base ? meta->callCall(base, name, params) : meta->callCallStatic(name, params);
+
+        // return a full copy of the zval, and do not destruct it
+        RETVAL_ZVAL(result._val, 1, 0);
     }
     catch (const NotImplemented &exception)
     {
         // because of the two-step nature, we are going to report the error ourselves
         zend_error(E_ERROR, "Undefined method %s", name);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // process the exception
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
     }
 }
 
@@ -151,9 +150,6 @@ void ClassImpl::callInvoke(INTERNAL_FUNCTION_PARAMETERS)
     // the function could throw an exception
     try
     {
-        // wrap the return value
-        Value result(return_value, true);
-
         // construct parameters
         ParametersImpl params(getThis(), ZEND_NUM_ARGS());
 
@@ -161,17 +157,20 @@ void ClassImpl::callInvoke(INTERNAL_FUNCTION_PARAMETERS)
         Base *base = params.object();
 
         // call the actual __invoke method on the base object
-        result = meta->callInvoke(base, params);
+        auto result = meta->callInvoke(base, params);
+
+        // return a full copy of the zval, and do not destruct it
+        RETVAL_ZVAL(result._val, 1, 0);
     }
     catch (const NotImplemented &exception)
     {
         // because of the two-step nature, we are going to report the error ourselves
         zend_error(E_ERROR, "Function name must be a string");
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // process the exception
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
     }
 }
 
@@ -211,16 +210,19 @@ zend_function *ClassImpl::getMethod(zend_object **object, zend_string *method, c
     auto *data = (CallData *)emalloc(sizeof(CallData));
     auto *function = &data->func;
 
-    // we're going to set all properties
-    function->type = ZEND_INTERNAL_FUNCTION;
-    function->module = nullptr;
-    function->handler = &ClassImpl::callMethod;
-    function->arg_info = nullptr;
-    function->num_args = 0;
+    // set all properties
+    function->type              = ZEND_INTERNAL_FUNCTION;
+    function->arg_flags[0]      = 0;
+    function->arg_flags[1]      = 0;
+    function->arg_flags[2]      = 0;
+    function->fn_flags          = ZEND_ACC_CALL_VIA_HANDLER;
+    function->function_name     = method;
+    function->scope             = entry;
+    function->prototype         = nullptr;
+    function->num_args          = 0;
     function->required_num_args = 0;
-    function->scope = entry;
-    function->fn_flags = ZEND_ACC_CALL_VIA_HANDLER;
-    function->function_name = method;
+    function->arg_info          = nullptr;
+    function->handler           = &ClassImpl::callMethod;
 
     // store pointer to ourselves
     data->self = self(entry);
@@ -252,16 +254,19 @@ zend_function *ClassImpl::getStaticMethod(zend_class_entry *entry, zend_string *
     auto *data = (CallData *)emalloc(sizeof(CallData));
     auto *function = &data->func;
 
-    // we're going to set all properties
-    function->type = ZEND_INTERNAL_FUNCTION;
-    function->module = nullptr;
-    function->handler = ClassImpl::callMethod;
-    function->arg_info = nullptr;
-    function->num_args = 0;
+    // set all properties for the function
+    function->type              = ZEND_INTERNAL_FUNCTION;
+    function->arg_flags[0]      = 0;
+    function->arg_flags[1]      = 0;
+    function->arg_flags[2]      = 0;
+    function->fn_flags          = ZEND_ACC_CALL_VIA_HANDLER;
+    function->function_name     = nullptr;
+    function->scope             = nullptr;
+    function->prototype         = nullptr;
+    function->num_args          = 0;
     function->required_num_args = 0;
-    function->scope = nullptr;
-    function->fn_flags = ZEND_ACC_CALL_VIA_HANDLER;
-    function->function_name = method;
+    function->arg_info          = nullptr;
+    function->handler           = &ClassImpl::callMethod;
 
     // store pointer to ourselves
     data->self = self(entry);
@@ -293,16 +298,19 @@ int ClassImpl::getClosure(zval *object, zend_class_entry **entry_ptr, zend_funct
     auto *data = (CallData *)emalloc(sizeof(CallData));
     auto *function = &data->func;
 
-    // we're going to set all properties
-    function->type = ZEND_INTERNAL_FUNCTION;
-    function->module = nullptr;
-    function->handler = &ClassImpl::callInvoke;
-    function->arg_info = nullptr;
-    function->num_args = 0;
+    // we're going to set all properties of the zend_internal_function struct
+    function->type              = ZEND_INTERNAL_FUNCTION;
+    function->arg_flags[0]      = 0;
+    function->arg_flags[1]      = 0;
+    function->arg_flags[2]      = 0;
+    function->fn_flags          = ZEND_ACC_CALL_VIA_HANDLER;
+    function->function_name     = zend_empty_string;            // should not be null, as this is free'ed by zend when doing exception handling
+    function->scope             = *entry_ptr;
+    function->prototype         = nullptr;
+    function->num_args          = 0;
     function->required_num_args = 0;
-    function->scope = *entry_ptr;
-    function->fn_flags = ZEND_ACC_CALL_VIA_HANDLER;
-    function->function_name = nullptr;
+    function->arg_info          = nullptr;
+    function->handler           = &ClassImpl::callInvoke;
 
     // store pointer to ourselves (note that the entry_ptr is useless
     // inside this function as it is always uninitialized for some reason)
@@ -422,11 +430,10 @@ int ClassImpl::compare(zval *val1, zval *val2)
         // call default
         return std_object_handlers.compare_objects(val1, val2);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // a Php::Exception was thrown by the extension __compare function,
-        // pass this on to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
 
         // what shall we return here...
         return 1;
@@ -484,10 +491,10 @@ int ClassImpl::cast(zval *val, zval *retval, int type)
         // call default
         return std_object_handlers.cast_object(val, retval, type);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // pass on the exception to php userspace
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
 
         // done
         return FAILURE;
@@ -563,10 +570,10 @@ int ClassImpl::countElements(zval *object, zend_long *count)
             // done
             return SUCCESS;
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
-            // process the exception
-            process(exception);
+            // object was not caught by the extension, let it end up in user space
+            throwable.rethrow();
 
             // unreachable
             return FAILURE;
@@ -626,10 +633,10 @@ zval *ClassImpl::readDimension(zval *object, zval *offset, int type, zval *rv)
             // ArrayAccess is implemented, call function
             return toZval(arrayaccess->offsetGet(offset), type, rv);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
-            // process the exception (send it to user space)
-            process(exception);
+            // object was not caught by the extension, let it end up in user space
+            throwable.rethrow();
 
             // unreachable
             return Value(nullptr).detach(false);
@@ -670,10 +677,10 @@ void ClassImpl::writeDimension(zval *object, zval *offset, zval *value)
             // set the value
             arrayaccess->offsetSet(offset, value);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
-            // process the exception (send it to user space
-            process(exception);
+            // object was not caught by the extension, let it end up in user space
+            throwable.rethrow();
         }
     }
     else
@@ -718,10 +725,10 @@ int ClassImpl::hasDimension(zval *object, zval *member, int check_empty)
             // the user wants to know if the property is empty
             return empty(arrayaccess->offsetGet(member));
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
-            // process the exception (send it to user space)
-            process(exception);
+            // object was not caught by the extension, let it end up in user space
+            throwable.rethrow();
 
             // unreachable
             return false;
@@ -760,10 +767,10 @@ void ClassImpl::unsetDimension(zval *object, zval *member)
             // remove the member
             arrayaccess->offsetUnset(member);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
-            // process the exception (send it to user space)
-            process(exception);
+            // object was not caught by the extension, let it end up in user space
+            throwable.rethrow();
         }
     }
     else
@@ -886,13 +893,12 @@ zval *ClassImpl::readProperty(zval *object, zval *name, int type, void **cache_s
         // call default
         return std_object_handlers.read_property(object, name, type, cache_slot, rv);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // user threw an exception in its magic method
-        // implementation, send it to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
 
-        // unreachable
+        // unreachable (or is it?)
         return Value(nullptr).detach(false);
     }
 }
@@ -954,11 +960,10 @@ void ClassImpl::writeProperty(zval *object, zval *name, zval *value, void **cach
         // call the default
         std_object_handlers.write_property(object, name, value, cache_slot);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // user threw an exception in its magic method
-        // implementation, send it to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
     }
 }
 
@@ -1026,11 +1031,10 @@ int ClassImpl::hasProperty(zval *object, zval *name, int has_set_exists, void **
         // call default
         return std_object_handlers.has_property(object, name, has_set_exists, cache_slot);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // user threw an exception in its magic method
-        // implementation, send it to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
 
         // unreachable
         return false;
@@ -1078,11 +1082,10 @@ void ClassImpl::unsetProperty(zval *object, zval *member, void **cache_slot)
         // call the default
         std_object_handlers.unset_property(object, member, cache_slot);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // user threw an exception in its magic method
-        // implementation, send it to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
     }
 }
 
@@ -1110,11 +1113,10 @@ void ClassImpl::destructObject(zend_object *object)
         // fallback on the default destructor call
         zend_objects_destroy_object(object);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // a regular Php::Exception was thrown by the extension, pass it on
-        // to PHP user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
     }
 }
 
@@ -1191,10 +1193,10 @@ zend_object_iterator *ClassImpl::getIterator(zend_class_entry *entry, zval *obje
         // done
         return wrapper->implementation();
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // user threw an exception in its method, send it to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
 
         // unreachable
         return nullptr;
@@ -1226,11 +1228,10 @@ int ClassImpl::serialize(zval *object, unsigned char **buffer, size_t *buf_len, 
         *buffer = (unsigned char*)estrndup(value.c_str(), value.size());
         *buf_len = value.size();
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
-        // user threw an exception in its method
-        // implementation, send it to user space
-        process(exception);
+        // object was not caught by the extension, let it end up in user space
+        throwable.rethrow();
 
         // unreachable
         return FAILURE;
@@ -1262,12 +1263,12 @@ int ClassImpl::unserialize(zval *object, zend_class_entry *entry, const unsigned
         // call the unserialize method on it
         serializable->unserialize((const char *)buffer, buf_len);
     }
-    catch (Exception &exception)
+    catch (Throwable &throwable)
     {
         // user threw an exception in its method
         // implementation, send it to user space
-        //process(exception);
         php_error_docref(NULL, E_NOTICE, "Error while unserializing");
+        //throwable.rethrow();
 
         // unreachable
         return FAILURE;
@@ -1310,7 +1311,7 @@ const struct _zend_function_entry *ClassImpl::entries()
     zend_function_entry *last = &_entries[i];
 
     // all should be set to zero
-    memset(last, 0, sizeof(*last));
+    memset(last, 0, sizeof(zend_function_entry));
 
     // done
     return _entries;
@@ -1405,6 +1406,10 @@ zend_class_entry *ClassImpl::initialize(ClassBase *base, const std::string &pref
         // otherwise report an error
         else std::cerr << "Derived class " << name() << " is initialized before base class " << interface->name() << ": interface is ignored" << std::endl;
     }
+    
+    // we may have to expose the Traversable or Serializable interfaces
+    if (_base->traversable()) zend_class_implements(_entry, 1, zend_ce_traversable);    
+    if (_base->serializable()) zend_class_implements(_entry, 1, zend_ce_serializable);    
 
     // this pointer has to be copied to temporary pointer, as &this causes compiler error
     ClassImpl *impl = this;

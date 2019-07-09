@@ -5,7 +5,7 @@
  *  within PHP
  *
  *  @author Martijn Otto <martijn.otto@copernica.com>
- *  @copyright 2016 Copernica B.V.
+ *  @copyright 2016 - 2019 Copernica B.V.
  */
 
 /**
@@ -58,11 +58,10 @@ private:
     static Parameters parameters(struct _zend_execute_data *execute_data);
 
     /**
-     *  Handle exceptions
-     *
-     *  @param  exception   The exception to handle
+     *  Handle throwables
+     *  @param  throwable       The object to handle
      */
-    static void handle(Exception &exception);
+    static void handle(Throwable &throwable);
 
     /**
      *  Yield (return) the given value
@@ -87,14 +86,14 @@ public:
         {
             // cast the base to the correct object and invoke the member
             (static_cast<T*>(instance(execute_data))->*callback)();
-
+            
             // there is no return value, so we just return null
             yield(return_value, nullptr);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
-            // handle the exception
-            handle(exception);
+            // handle the throwable
+            handle(throwable);
         }
     }
 
@@ -116,10 +115,10 @@ public:
             // there is no return value, so we just return null
             yield(return_value, nullptr);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -141,10 +140,10 @@ public:
             // store the return value in the return_value
             yield(return_value, result);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -166,10 +165,10 @@ public:
             // store the return value in the return_value
             yield(return_value, result);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -197,10 +196,10 @@ public:
             // there is no return value, so we just reutrn null
             yield(return_value, nullptr);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -228,10 +227,10 @@ public:
             // there is no return value, so we just return null
             yield(return_value, nullptr);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -259,10 +258,10 @@ public:
             // store the return value in the return_value
             yield(return_value, result);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -290,10 +289,10 @@ public:
             // store the return value in the return_value
             yield(return_value, result);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -315,10 +314,10 @@ public:
             // there is no return value, so we just return null
             yield(return_value, nullptr);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -340,10 +339,10 @@ public:
             // store the return value in the return_value
             yield(return_value, result);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -371,10 +370,10 @@ public:
             // there is no return value, so we just return null
             yield(return_value, nullptr);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 
@@ -402,10 +401,10 @@ public:
             // store the return value in the return_value
             yield(return_value, result);
         }
-        catch (Exception &exception)
+        catch (Throwable &throwable)
         {
             // handle the exception
-            handle(exception);
+            handle(throwable);
         }
     }
 };
